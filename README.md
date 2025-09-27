@@ -4,16 +4,14 @@
 
 ## Integrantes
 
-
 [David Santiago Puentes Cárdenas - 99225](https://github.com/Monstertrox)
 
 [Juan David Arias Bojacá - 107394](https://github.com/juandariasb-ai)
 
 ## Documentación
 
-<!-- Incluir diagramas y adjuntar al repositorio, en una carpeta src, el flujo que crearon -->
 1. Descripción
-Sistema de visualización de datos implementado en Raspberry Pi utilizando Node-RED y Python. Incluye:
+   Sistema de visualización de datos implementado en Raspberry Pi utilizando Node-RED y Python. Incluye:
 
 Flujo Node-RED con selector de color, visualización de valores RGB y almacenamiento en archivo.
 
@@ -25,7 +23,7 @@ Dashboard interactivo para control y monitoreo.
 
 ## 2. Diagrama del Flujo (Simplificado)
 
-Flujo del sistema implementado (conexión entre Raspberry Pi, Node-RED y Python):  
+Flujo del sistema implementado (conexión entre Raspberry Pi, Node-RED y Python):
 
 ![flujo]("C:\Users\DELL\Downloads\VPN.png")
 
@@ -69,8 +67,8 @@ En interfaz Node-RED: Menu > Manage palette > Install
 Buscar e instalar: node-red-dashboard
 
 5. Flujo de Node-RED
-5.1. Configuración de Nodos
-Color Picker Node:
+   5.1. Configuración de Nodos
+   Color Picker Node:
 
 Grupo: Default
 
@@ -90,8 +88,8 @@ Function Node (Procesamiento):
 
 // Conversión hexadecimal a RGB
 msg.payload = {
-    hex: msg.payload,
-    rgb: hexToRgb(msg.payload)
+hex: msg.payload,
+rgb: hexToRgb(msg.payload)
 };
 return msg;
 
@@ -107,8 +105,8 @@ Color Picker → Function → [Text Input, Debug, File]
 Text Input → Function → [Debug, File]
 
 6. Acceso y Operación
-6.1. Interfaz Web
-Node-RED Editor: http://ip_raspberry:1880
+   6.1. Interfaz Web
+   Node-RED Editor: http://ip_raspberry:1880
 
 Dashboard: http://ip_raspberry:1880/ui
 
@@ -138,8 +136,8 @@ Parsing robusto de formatos de color
 Manejo de valores fuera de rango (0-255)
 
 8. Ejemplos de Uso
-8.1. Caso Normal
-Usuario selecciona color #4A90E2 en el picker
+   8.1. Caso Normal
+   Usuario selecciona color #4A90E2 en el picker
 
 Campo de texto muestra 74, 144, 226
 
@@ -154,20 +152,19 @@ Function node convierte a hexadecimal #80FF00
 
 Flujo continúa igual que con selección por picker
 
-
 ## Conclusiones
 
 1. Configuración Correcta de Acceso Remoto - Elemento Crítico
-Se demostró que la configuración precisa de la dirección IP y puertos es fundamental para el éxito del proyecto. Aspectos clave identificados:
+   Se demostró que la configuración precisa de la dirección IP y puertos es fundamental para el éxito del proyecto. Aspectos clave identificados:
 
 IP Exacta de la Raspberry Pi: El uso de la dirección IP correcta es indispensable para la conexión SSH inicial y posterior acceso web
 
-Puerto 1880 Obligatorio: La URL http://[IP_RASPBERRY]:1880 no es opcional - sin el puerto 1880 explícito, el acceso a Node-RED es imposible
+Puerto 1880 Obligatorio: La URL http://[100.97.75.115]:1880 no es opcional - sin el puerto 1880 explícito, el acceso a Node-RED es imposible
 
-Dashboard en /ui: La ruta específica http://[IP_RASPBERRY]:1880/ui es esencial para visualizar la interfaz del usuario final
+Dashboard en /ui: La ruta específica http://[100.97.75.115]:1880/ui es esencial para visualizar la interfaz del usuario final
 
 2. Consecuencias de Configuraciones Incorrectas
-Se evidenció que errores en estos parámetros generan problemas inmediatos:
+   Se evidenció que errores en estos parámetros generan problemas inmediatos:
 
 Conexión SSH Fallida: IP incorrecta → imposibilidad de administración remota
 
@@ -176,20 +173,19 @@ Node-RED Inaccesible: Omisión del puerto 1880 → error de conexión en el nave
 Dashboard No Visible: Falta de /ui → interfaz de usuario no disponible, aunque Node-RED esté funcionando
 
 3. Verificación en Capas del Acceso
-El proyecto implementó una estrategia de verificación escalonada:
+   El proyecto implementó una estrategia de verificación escalonada:
 
-Conexión SSH Exitosa (IP correcta) 
-    ↓
-Node-RED Accesible (IP:1880) 
-    ↓
+Conexión SSH Exitosa (IP correcta)
+↓
+Node-RED Accesible (IP:1880)
+↓
 Dashboard Funcional (IP:1880/ui)
-    ↓
+↓
 Sistema Operativo Completamente
 
 4. Importancia del Puerto 1880 en la Arquitectura
-Puerto Predeterminado: 1880 no es aleatorio - es el puerto estándar asignado oficialmente para Node-RED
+   Puerto Predeterminado: 1880 no es aleatorio - es el puerto estándar asignado oficialmente para Node-RED
 
 Avoids Port Conflicts: Evita conflictos con otros servicios web (puerto 80) o aplicaciones
 
 Security Aspect: Puerto no estándar proporciona mínima seguridad por ofuscación
-
