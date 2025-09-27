@@ -3,189 +3,314 @@
 # Lab 4 — Visualización de datos en Raspberry Pi con Node-RED y Python
 
 ## Integrantes
+- [David Santiago Puentes Cárdenas — 99225](https://github.com/Monstertrox)  
+- [Juan David Arias Bojacá — 107394](https://github.com/juandariasb-ai)
 
-[David Santiago Puentes Cárdenas - 99225](https://github.com/Monstertrox)
+---
 
-[Juan David Arias Bojacá - 107394](https://github.com/juandariasb-ai)
+## 1) Descripción general
 
-## Documentación
+Este laboratorio implementa un **sistema de visualización y registro de colores** en una **Raspberry Pi** usando **Node-RED** (dashboard web) y **Python** (procesamiento de datos). El flujo permite:
 
-1. Descripción
-   Sistema de visualización de datos implementado en Raspberry Pi utilizando Node-RED y Python. Incluye:
+- Elegir un color en un **Color Picker** (dashboard Node-RED).  
+- Ver y editar el color en **RGB** de forma manual.  
+- **Convertir** entre **Hex ↔ RGB** en tiempo real.  
+- **Guardar** los datos (con timestamp) en un archivo local.  
+- **Procesar** esos registros con un script de **Python**.
 
-Flujo Node-RED con selector de color, visualización de valores RGB y almacenamiento en archivo.
+> Objetivo: construir un pipeline simple, reproducible y robusto de **captura → transformación → almacenamiento → análisis** sobre Raspberry Pi.
 
-Script Python para lectura y procesamiento de valores RGB desde archivo.
+---
 
-Configuración automática de Node-RED como servicio systemd.
+## 2) Requisitos
 
-Dashboard interactivo para control y monitoreo.
+- **Hardware**: Raspberry Pi (3B+ o superior recomendado), microSD ≥16 GB, red local.  
+- **SO**: Raspberry Pi OS (32/64 bits).  
+- **Software**:  
+  - Node.js + Node-RED (instalador oficial de Node-RED para Pi).  
+  - Python 3 con `pip` (incluye `venv` si se desea aislamiento).  
+- **Red**: IP de la Pi accesible desde el navegador del cliente.
 
-## 2. Diagrama del Flujo (Simplificado)
+---
 
-Flujo del sistema implementado (conexión entre Raspberry Pi, Node-RED y Python):
+## 3) Arquitectura y diagrama
 
-![flujo]("C:\Users\DELL\Downloads\VPN.png")
+Flujo de datos: **Usuario (web) → Node-RED (dashboard) → conversión → archivo → Python (procesamiento)**.
 
-3. Componentes Principales
 
-3.1. Node-RED Flow
-Color Picker: Selector gráfico de color hexadecimal
+![Diagrama del flujo](src/flujo.png)
 
-Text Input: Campo para visualización/edición manual de valores RGB
 
-Function Node: Conversión y procesamiento de datos de color
+---
 
-File Node: Almacenamiento persistente en archivo de texto
+## 4) Estructura sugerida del repositorio
 
-Debug Node: Monitoreo en tiempo real del flujo de datos
+```
+.
+├─ README.md
+├─ src/
+│  ├─ flujo.png                 # Diagrama del sistema (esta imagen)
+│  ├─ flow_lab4.json            # Export del flujo Node-RED (opcional)
+│  └─ color_data.txt            # Archivo de datos (generado por Node-RED)
+└─ python/
+   └─ procesar_colores.py       # Script de ejemplo en Python
+```
 
-4. Instrucciones de Instalación y Configuración
+---
 
-4.1. Conexión SSH a Raspberry Pi
+## 5) Instalación y configuración
 
-ssh usuario_raspberry@ip_raspberry
+### 5.1. Acceso por SSH
+```bash
+ssh usuario@IP_DE_LA_PI
+# Tip: para conocer la IP en la Pi
+hostname -I
+```
 
-4.2. Instalación de Node-RED
-
+### 5.2. Instalar/actualizar Node-RED en Raspberry Pi
+```bash
 bash <(curl -sL https://raw.githubusercontent.com/node-red/linux-installers/master/deb/update-nodejs-and-nodered)
+```
+Durante la instalación responde:  
+- **Are you really sure you want to do this? [y/N] →** `y`  
+- **Would you like to install the Pi-specific nodes? [y/N] →** `y`
 
-Respuestas durante instalación:
-
-Are you really sure you want to do this? [y/N] → y
-
-Would you like to install the Pi-specific nodes? [y/N] → y
-
-4.3. Configuración como Servicio Systemd
-
+### 5.3. Habilitar Node-RED como servicio
+```bash
 sudo systemctl enable nodered.service
-sudo reboot
+sudo systemctl start nodered.service
+# Ver estado y logs si algo falla:
+systemctl status nodered.service
+journalctl -u nodered -f
+```
 
-4.4. Instalación del Dashboard
-En interfaz Node-RED: Menu > Manage palette > Install
+### 5.4. Instalar el Dashboard en Node-RED
+En el editor web de Node-RED: **Menu → Manage palette → Install**  
+Buscar e instalar: **`node-red-dashboard`**
 
-Buscar e instalar: node-red-dashboard
+---
 
-5. Flujo de Node-RED
-   5.1. Configuración de Nodos
-   Color Picker Node:
+## 6) Flujo en Node-RED
 
-Grupo: Default
+### 6.1. Nodos y configuración
 
-Etiqueta: Selector de Color
+**Color Picker (dashboard)**
+- Grupo: `Default`
+- Etiqueta: `Selector de color`
+- Formato: **Hexadecimal** (ej. `#80FF00`)
 
-Formato: Hexadecimal
+**Text Input (dashboard)**
+- Grupo: `Default`
+- Etiqueta: `Valores RGB`
+- Placeholder: `Ej: 255,128,64`
+- Validar que el texto cumpla `R,G,B` con `0–255`.
 
-Text Input Node:
+**Function (Procesamiento y conversiones)**  
+_Conversión Hex → RGB y RGB → Hex; salida unificada con timestamp._
+```js
+// Utilidades
+function clamp(v){ v = Number(v); return Math.max(0, Math.min(255, v||0)); }
+function hexToRgb(hex){
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec((hex||"").trim());
+    if(!m) return null;
+    return { r: parseInt(m[1],16), g: parseInt(m[2],16), b: parseInt(m[3],16) };
+}
+function rgbToHex(r,g,b){
+    const toHex = (n)=>clamp(n).toString(16).padStart(2,"0").toUpperCase();
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
 
-Grupo: Default
+// Entradas posibles:
+// - Desde Color Picker: msg.payload = "#RRGGBB"
+// - Desde Text Input:   msg.payload = "R,G,B"
+const now = new Date().toISOString();
+let hex, rgb;
 
-Etiqueta: Valores RGB
+if (typeof msg.payload === "string" && msg.payload.trim().startsWith("#")) {
+    // Viene del Color Picker
+    rgb = hexToRgb(msg.payload.trim());
+    if(!rgb) { node.error("Hex inválido", msg); return null; }
+    hex = msg.payload.trim().toUpperCase();
+} else if (typeof msg.payload === "string") {
+    // Viene de Text Input
+    const parts = msg.payload.split(",").map(s=>s.trim());
+    if (parts.length !== 3) { node.error("RGB inválido", msg); return null; }
+    rgb = { r: clamp(parts[0]), g: clamp(parts[1]), b: clamp(parts[2]) };
+    hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+} else {
+    node.error("Tipo de payload no soportado", msg);
+    return null;
+}
 
-Placeholder: Ej: 255,128,64
-
-Function Node (Procesamiento):
-
-// Conversión hexadecimal a RGB
+// Estructura canónica
 msg.payload = {
-hex: msg.payload,
-rgb: hexToRgb(msg.payload)
+    timestamp: now,
+    hex,
+    rgb
 };
+
+// Para escritura en archivo como línea JSON
+msg.line = JSON.stringify(msg.payload) + "\n";
 return msg;
+```
 
-File Node (Almacenamiento):
+**File (Almacenamiento persistente)**
+- Filename: `/home/pi/color_data.txt` (o `src/color_data.txt` dentro del repo si tienes permisos).  
+- Acción: **`Append to file`**  
+- **Contenido a escribir**: usa `msg.line` (línea JSON con salto de línea).  
+  - En el nodo File: setea **`msg.line`** como entrada (habilita “Append” y “utf8”).
 
-Filename: /home/pi/color_data.txt
+**Debug (Monitoreo)**
+- Nivel: `complete msg` para ver estructura y depurar.
 
-Acción: Append to file
+### 6.2. Conexiones del flujo
 
-5.2. Conexiones del Flujo
+```
+Color Picker  ─┐
+               ├─> Function ──> Debug
+Text Input   ──┘               └─> File (append JSONL)
+```
 
-Color Picker → Function → [Text Input, Debug, File]
-Text Input → Function → [Debug, File]
+---
 
-6. Acceso y Operación
-   6.1. Interfaz Web
-   Node-RED Editor: http://ip_raspberry:1880
+## 7) Script de Python (procesamiento)
 
-Dashboard: http://ip_raspberry:1880/ui
+Ejemplo: lectura de **JSONL** (`color_data.txt`), estadísticas simples y generación de colores complementarios.
 
-6.2. Flujo de Operación
-Selección de Color: Usar color picker en el dashboard
+`python/procesar_colores.py`
+```python
+#!/usr/bin/env python3
+import json
+from pathlib import Path
+from datetime import datetime
 
-Visualización: Valores RGB mostrados en campo de texto
+DATA_FILE = Path(__file__).resolve().parents[1] / "src" / "color_data.txt"
 
-Almacenamiento: Datos guardados automáticamente en archivo
+def hex_to_rgb(hex_str: str):
+    hex_str = hex_str.strip().lstrip("#")
+    if len(hex_str) != 6:
+        return None
+    r = int(hex_str[0:2], 16)
+    g = int(hex_str[2:4], 16)
+    b = int(hex_str[4:6], 16)
+    return (r, g, b)
 
-Procesamiento: Script Python lee y procesa los datos almacenados
+def rgb_to_hex(r: int, g: int, b: int) -> str:
+    clamp = lambda v: max(0, min(255, int(v)))
+    return "#{:02X}{:02X}{:02X}".format(clamp(r), clamp(g), clamp(b))
 
-7. Validaciones y Manejo de Errores
+def complement(hex_str: str) -> str:
+    r, g, b = hex_to_rgb(hex_str)
+    return rgb_to_hex(255 - r, 255 - g, 255 - b)
 
-7.1. Validaciones en Node-RED
-Formato hexadecimal válido en color picker
+def main():
+    if not DATA_FILE.exists():
+        print(f"[WARN] No existe el archivo: {DATA_FILE}")
+        return
 
-Validación de formato RGB en text input
+    registros = []
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                item = json.loads(line)
+                # Validaciones mínimas
+                if "hex" in item and "rgb" in item and "timestamp" in item:
+                    registros.append(item)
+            except json.JSONDecodeError:
+                # Línea corrupta o previa al cambio a JSONL: ignorar
+                continue
 
-Manejo de errores en escritura de archivo
+    if not registros:
+        print("[INFO] No hay registros válidos.")
+        return
 
-7.2. Validaciones en Python
-Verificación de existencia de archivo
+    # Reporte simple
+    latest = max(registros, key=lambda x: x["timestamp"])
+    comp = complement(latest["hex"])
+    print("=== Resumen ===")
+    print(f"Total de registros: {len(registros)}")
+    print(f"Último registro: {latest['timestamp']} — {latest['hex']} {latest['rgb']}")
+    print(f"Complementario: {comp}")
 
-Parsing robusto de formatos de color
+if __name__ == "__main__":
+    main()
 
-Manejo de valores fuera de rango (0-255)
+## 8) Acceso y operación
 
-8. Ejemplos de Uso
-   8.1. Caso Normal
-   Usuario selecciona color #4A90E2 en el picker
+- **Editor Node-RED**: `http://IP_DE_LA_PI:1880`  
+- **Dashboard**: `http://IP_DE_LA_PI:1880/ui`
 
-Campo de texto muestra 74, 144, 226
+**Flujo típico**  
+1. Abre el dashboard y selecciona un color con el **Color Picker**.  
+2. Observa/edita los valores en **RGB** (campo de texto).  
+3. El Function convierte y **uniformiza** la salida (`{ timestamp, hex, rgb }`).  
+4. El nodo File **anexa** una línea JSON al archivo.  
+5. Ejecuta Python para **analizar** lo registrado:
+   ```bash
+   cd python
+   python3 procesar_colores.py
+   ```
 
-Datos se guardan en archivo con timestamp
+---
 
-Script Python procesa los valores para aplicación específica
+## 9) Validaciones y manejo de errores
 
-8.2. Entrada Manual
-Usuario escribe 128, 255, 0 en campo de texto
+**En Node-RED**
+- **Hex válido**: `#RRGGBB` (6 dígitos hex).  
+- **RGB válido**: `R,G,B` con `0–255`.  
+- **Permisos de archivo**: si `/home/pi/color_data.txt` no se crea, revisa permisos del usuario que ejecuta el servicio.
 
-Function node convierte a hexadecimal #80FF00
+**En Python**
+- Verifica existencia del archivo.  
+- Ignora líneas corruptas (pre-JSONL) sin romper la ejecución.  
+- “Clampea” valores al rango `0–255`.
 
-Flujo continúa igual que con selección por picker
+**Servicio**
+```bash
+systemctl status nodered.service
+journalctl -u nodered -f
+```
 
-## Conclusiones
+---
 
-1. Configuración Correcta de Acceso Remoto - Elemento Crítico
-   Se demostró que la configuración precisa de la dirección IP y puertos es fundamental para el éxito del proyecto. Aspectos clave identificados:
+## 10) Pruebas rápidas (E2E)
 
-IP Exacta de la Raspberry Pi: El uso de la dirección IP correcta es indispensable para la conexión SSH inicial y posterior acceso web
+1. **Conectividad**: `ping IP_DE_LA_PI`  
+2. **Editor**: abre `http://IP_DE_LA_PI:1880` y despliega el flujo sin errores.  
+3. **Dashboard**: cambia el color; verifica en Node-RED **Debug** la estructura de `msg.payload`.  
+4. **Archivo**: confirma que `src/color_data.txt` o `/home/pi/color_data.txt` **crece** y contiene líneas JSON válidas.  
+5. **Python**: corre `procesar_colores.py` y revisa el resumen.
 
-Puerto 1880 Obligatorio: La URL http://[100.97.75.115]:1880 no es opcional - sin el puerto 1880 explícito, el acceso a Node-RED es imposible
+---
 
-Dashboard en /ui: La ruta específica http://[100.97.75.115]:1880/ui es esencial para visualizar la interfaz del usuario final
+## 11) Mejoras opcionales
 
-2. Consecuencias de Configuraciones Incorrectas
-   Se evidenció que errores en estos parámetros generan problemas inmediatos:
+- **MQTT (Mosquitto)**: publicar `hex/rgb` en un tópico (`vision/color`) para integrar otros nodos/procesos.  
+- **HTTPS/Reverse Proxy**: exponer Node-RED detrás de Nginx con TLS (mejor para redes abiertas).  
+- **Cambio de puerto**: si 1880 está ocupado, define `uiPort` en `~/.node-red/settings.js`.  
+- **Autenticación**: habilitar credenciales en el editor y en dashboard.  
+- **File rollover**: separar registros por día (`color_data_YYYYMMDD.txt`).  
+- **Análisis avanzado**: Python puede transformar a HSV/HSL, generar paletas o disparar alertas si se cumple cierta condición.
 
-Conexión SSH Fallida: IP incorrecta → imposibilidad de administración remota
+---
 
-Node-RED Inaccesible: Omisión del puerto 1880 → error de conexión en el navegador
+## 12) Conclusiones
 
-Dashboard No Visible: Falta de /ui → interfaz de usuario no disponible, aunque Node-RED esté funcionando
+- **Acceso correcto** = mitad del éxito: IP válida + `:1880` para editor y `/ui` para dashboard.  
+- **Datos coherentes**: unificar la **salida canónica** (`{timestamp, hex, rgb}`) simplifica depuración y análisis.  
+- **Persistencia simple pero eficaz**: JSONL + `append` permite historiales, auditoría y fácil parsing.  
+- **Escalabilidad**: con MQTT y rotación de archivos, el flujo crece sin volverse frágil.  
+- **Mantenibilidad**: correr Node-RED como **servicio systemd** garantiza reinicio automático y observabilidad con `journalctl`.
 
-3. Verificación en Capas del Acceso
-   El proyecto implementó una estrategia de verificación escalonada:
+---
 
-Conexión SSH Exitosa (IP correcta)
-↓
-Node-RED Accesible (IP:1880)
-↓
-Dashboard Funcional (IP:1880/ui)
-↓
-Sistema Operativo Completamente
+## 13) Créditos y referencias
 
-4. Importancia del Puerto 1880 en la Arquitectura
-   Puerto Predeterminado: 1880 no es aleatorio - es el puerto estándar asignado oficialmente para Node-RED
+- Node-RED y Node-RED Dashboard.  
+- Python 3 (estándar).  
+- Raspberry Pi OS.  
 
-Avoids Port Conflicts: Evita conflictos con otros servicios web (puerto 80) o aplicaciones
 
-Security Aspect: Puerto no estándar proporciona mínima seguridad por ofuscación
